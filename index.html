@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>MusicGrid</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: sans-serif;
+      background: #121212;
+      color: white;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    h1 {
+      margin-top: 1rem;
+      font-size: 2rem;
+    }
+
+    #homeScreen, #editorScreen {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      padding: 1rem;
+    }
+
+    #editorScreen {
+      display: none;
+    }
+
+    #grid {
+      display: grid;
+      grid-template-columns: repeat(18, 30px);
+      grid-template-rows: repeat(18, 30px);
+      gap: 2px;
+      margin: 10px 0;
+      position: relative;
+    }
+
+    .cell {
+      width: 30px;
+      height: 30px;
+      background: #1e1e1e;
+      border: 1px solid #333;
+      position: relative;
+    }
+
+    .note-in-cell {
+      width: 100%;
+      height: 100%;
+      text-align: center;
+      font-size: 0.6rem;
+      line-height: 30px;
+      font-weight: bold;
+    }
+
+    #noteButtons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+
+    .note-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 2px solid transparent;
+    }
+
+    .note-btn.selected, #deleteTool.selected {
+      border: 2px solid limegreen;
+    }
+
+    #controls {
+      display: flex;
+      gap: 10px;
+    }
+
+    #playLine {
+      position: absolute;
+      width: 2px;
+      top: 0;
+      bottom: 0;
+      background: red;
+      pointer-events: none;
+      transition: left 0.05s linear;
+    }
+
+    button {
+      padding: 0.5rem 1rem;
+      background: #333;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    #songList > div {
+      cursor: pointer;
+      padding: 6px;
+      border: 1px solid #444;
+      border-radius: 4px;
+      margin: 2px;
+      background: #222;
+    }
+
+    input {
+      padding: 6px;
+      border-radius: 4px;
+      border: none;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎵 MusicGrid</h1>
+
+  <div id="homeScreen">
+    <form id="newSongForm">
+      <input type="text" id="newSongName" placeholder="New song name" required />
+      <button type="submit">Create Song</button>
+    </form>
+    <h3>Your Songs:</h3>
+    <div id="songList"></div>
+  </div>
+
+  <div id="editorScreen">
+    <div id="controls">
+      <button id="playBtn">▶️ Play</button>
+      <button id="stopBtn">⏹️ Stop</button>
+      <button id="deleteTool">🗑️ Delete</button>
+      <button id="backHomeBtn">🏠 Home</button>
+    </div>
+    <div id="noteButtons"></div>
+    <div id="grid"></div>
+  </div>
+
+  <script>
+    const gridSize = 18;
+    const grid = document.getElementById("grid");
+    const noteButtonsDiv = document.getElementById("noteButtons");
+    const playBtn = document.getElementById("playBtn");
+    const stopBtn = document.getElementById("stopBtn");
+    const deleteTool = document.getElementById("deleteTool");
+    const backHomeBtn = document.getElementById("backHomeBtn");
+    const newSongForm = document.getElementById("newSongForm");
+    const newSongNameInput = document.getElementById("newSongName");
+    const songListDiv = document.getElementById("songList");
+    const homeScreen = document.getElementById("homeScreen");
+    const editorScreen = document.getElementById("editorScreen");
+
+    const playLine = document.createElement("div");
+    playLine.id = "playLine";
+    grid.appendChild(playLine);
+
+    let selectedNoteIndex = null;
+    let gridNotes = Array(gridSize * gridSize).fill(null);
+    let currentSongName = null;
+    let isPlaying = false;
+    let playCol = 0;
+    let playInterval;
+
+    const notes = Array.from({ length: 20 }, (_, i) => ({
+      name: "N" + (i + 1),
+      color: `hsl(${(i * 18) % 360}, 80%, 60%)`,
+      freq: 220 * Math.pow(2, i / 12)
+    }));
+
+    function createNoteButtons() {
+      notes.forEach((note, idx) => {
+        const btn = document.createElement("div");
+        btn.className = "note-btn";
+        btn.style.background = note.color;
+        btn.title = note.name;
+        btn.textContent = note.name;
+        btn.addEventListener("click", () => {
+          selectedNoteIndex = idx;
+          updateSelectedNoteUI();
+        });
+        noteButtonsDiv.appendChild(btn);
+      });
+    }
+
+    function updateSelectedNoteUI() {
+      [...noteButtonsDiv.children].forEach((btn, i) => {
+        btn.classList.toggle("selected", i === selectedNoteIndex);
+      });
+      deleteTool.classList.toggle("selected", selectedNoteIndex === "delete");
+    }
+
+    function createGrid() {
+      grid.innerHTML = "";
+      grid.appendChild(playLine);
+      for (let i = 0; i < gridSize * gridSize; i++) {
+        const cell = document.createElement("div");
+        cell.className = "cell";
+        const noteDiv = document.createElement("div");
+        noteDiv.className = "note-in-cell";
+        cell.appendChild(noteDiv);
+        cell.addEventListener("click", () => {
+          if (selectedNoteIndex === "delete") {
+            gridNotes[i] = null;
+          } else if (selectedNoteIndex !== null) {
+            gridNotes[i] = selectedNoteIndex;
+          }
+          updateGridFromNotes();
+        });
+        grid.appendChild(cell);
+      }
+      updateGridFromNotes();
+    }
+
+    function updateGridFromNotes() {
+      const cells = grid.querySelectorAll(".cell");
+      for (let i = 0; i < gridNotes.length; i++) {
+        const noteDiv = cells[i].querySelector(".note-in-cell");
+        const noteIdx = gridNotes[i];
+        if (noteIdx === null) {
+          noteDiv.style.backgroundColor = "";
+          noteDiv.textContent = "";
+        } else {
+          noteDiv.style.backgroundColor = notes[noteIdx].color;
+          noteDiv.textContent = notes[noteIdx].name;
+        }
+      }
+    }
+
+    function startPlaying() {
+      if (isPlaying) return;
+      isPlaying = true;
+      playCol = 0;
+      playLine.style.left = "0px";
+      playLine.style.display = "block";
+      const colWidth = 32;
+
+      playInterval = setInterval(() => {
+        const x = playCol * colWidth;
+        playLine.style.left = x + "px";
+        for (let row = 0; row < gridSize; row++) {
+          const i = row * gridSize + playCol;
+          const noteIdx = gridNotes[i];
+          if (noteIdx !== null) {
+            const cell = grid.children[i + 1]; // +1 to skip playLine
+            const noteDiv = cell.querySelector(".note-in-cell");
+            noteDiv.style.transform = "scale(1.5)";
+            noteDiv.style.filter = "brightness(2)";
+            playNote(notes[noteIdx].freq);
+            setTimeout(() => {
+              noteDiv.style.transform = "scale(1)";
+              noteDiv.style.filter = "brightness(1)";
+            }, 200);
+          }
+        }
+        playCol++;
+        if (playCol >= gridSize) playCol = 0;
+      }, 300);
+    }
+
+    function stopPlaying() {
+      clearInterval(playInterval);
+      isPlaying = false;
+      playLine.style.display = "none";
+    }
+
+    function playNote(freq) {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.frequency.value = freq;
+      osc.type = "sine";
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      gain.gain.setValueAtTime(0.2, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.3);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.3);
+    }
+
+    deleteTool.addEventListener("click", () => {
+      selectedNoteIndex = selectedNoteIndex === "delete" ? null : "delete";
+      updateSelectedNoteUI();
+    });
+
+    newSongForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const name = newSongNameInput.value.trim();
+      if (!name) return alert("Enter song name.");
+      const songs = loadSongs();
+      if (songs[name] && !confirm("Overwrite existing song?")) return;
+      currentSongName = name;
+      clearGrid();
+      saveCurrentSong();
+      editorScreen.style.display = "flex";
+      homeScreen.style.display = "none";
+      selectedNoteIndex = null;
+      updateSelectedNoteUI();
+      newSongNameInput.value = "";
+    });
+
+    backHomeBtn.addEventListener("click", () => {
+      stopPlaying();
+      saveCurrentSong();
+      currentSongName = null;
+      editorScreen.style.display = "none";
+      homeScreen.style.display = "flex";
+      refreshSongList();
+    });
+
+    function saveCurrentSong() {
+      if (!currentSongName) return;
+      const songs = loadSongs();
+      songs[currentSongName] = [...gridNotes];
+      localStorage.setItem("songs", JSON.stringify(songs));
+    }
+
+    function loadSongs() {
+      return JSON.parse(localStorage.getItem("songs") || "{}");
+    }
+
+    function clearGrid() {
+      gridNotes = Array(gridSize * gridSize).fill(null);
+      updateGridFromNotes();
+    }
+
+    function refreshSongList() {
+      songListDiv.innerHTML = "";
+      const songs = loadSongs();
+      for (let name in songs) {
+        const div = document.createElement("div");
+        div.textContent = name;
+        div.addEventListener("click", () => {
+          currentSongName = name;
+          gridNotes = songs[name];
+          editorScreen.style.display = "flex";
+          homeScreen.style.display = "none";
+          createGrid();
+          updateGridFromNotes();
+        });
+        songListDiv.appendChild(div);
+      }
+    }
+
+    // Start
+    createNoteButtons();
+    createGrid();
+    updateSelectedNoteUI();
+    refreshSongList();
+
+    playBtn.addEventListener("click", startPlaying);
+    stopBtn.addEventListener("click", stopPlaying);
+
+    homeScreen.style.display = "flex";
+  </script>
+</body>
+</html>
