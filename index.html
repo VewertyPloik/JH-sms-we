@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>BuildSurvival</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; height: 100%; background: #a3d9a5;
+    font-family: 'Segoe UI Emoji', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    user-select: none;
+    overflow: hidden;
+  }
+  #homeScreen, #gameScreen {
+    width: 100vw; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  #homeScreen { background: #226622; color: white; }
+  button {
+    font-size: 1.5rem; margin: 10px; padding: 12px 24px; border-radius: 12px; border: none; background: #33bb33; color: white;
+    cursor: pointer;
+    user-select: none;
+  }
+  button:disabled {
+    background: #666;
+    cursor: not-allowed;
+  }
+  #worldList {
+    margin-top: 20px;
+  }
+  #worldList button {
+    width: 200px;
+  }
+  #gameScreen {
+    position: relative;
+    background: #a3d9a5;
+    color: white;
+  }
+  #canvasContainer {
+    position: relative;
+    margin-top: 8px;
+  }
+  canvas {
+    background: transparent;
+    image-rendering: pixelated;
+    border: 3px solid #555;
+    border-radius: 8px;
+  }
+  #ui {
+    position: absolute; top: 8px; left: 8px; background: rgba(0,0,0,0.5); padding: 6px 10px; border-radius: 6px;
+    font-size: 1.2rem;
+    line-height: 1.4;
+    user-select: none;
+    min-width: 120px;
+  }
+  #saveStatus {
+    font-size: 0.8rem; color: #ff0;
+    height: 1.2rem;
+  }
+  #message {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    background: rgba(0,0,0,0.7);
+    padding: 12px 20px;
+    border-radius: 10px;
+    font-size: 1.6rem;
+    pointer-events: none;
+    user-select: none;
+  }
+  #inventory {
+    position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+    display: flex; background: rgba(0,0,0,0.6); border-radius: 8px; padding: 6px;
+  }
+  .invSlot {
+    font-size: 2rem;
+    width: 48px; height: 48px;
+    margin: 0 4px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 6px;
+    text-align: center;
+    line-height: 48px;
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+  }
+  .invSlot.selected {
+    border: 3px solid #ff0;
+    background: rgba(255,255,255,0.5);
+  }
+  .invCount {
+    position: absolute; bottom: 2px; right: 4px;
+    font-size: 0.7rem; color: black;
+    background: #fff;
+    border-radius: 8px;
+    padding: 0 4px;
+    user-select: none;
+  }
+  #arrowPad {
+    position: absolute;
+    bottom: 90px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 160px;
+    height: 160px;
+    display: grid;
+    grid-template-columns: 60px 60px 60px;
+    grid-template-rows: 60px 60px 60px;
+    gap: 4px;
+    user-select: none;
+  }
+  .arrowBtn {
+    font-size: 2.4rem;
+    background: #33bb33cc;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    user-select: none;
+  }
+  .arrowBtn:active {
+    background: #229922cc;
+  }
+  .hidden {
+    display: none !important;
+  }
+  #craftingPanel {
+    position: absolute;
+    right: 8px;
+    top: 50px;
+    background: rgba(0,0,0,0.7);
+    padding: 10px 15px;
+    border-radius: 12px;
+    font-size: 1.2rem;
+    max-width: 220px;
+    display: none;
+  }
+  #craftingPanel h3 {
+    margin-top: 0; margin-bottom: 8px;
+  }
+  .craftBtn {
+    background: #44cc44;
+    border: none;
+    border-radius: 8px;
+    padding: 6px 12px;
+    margin: 6px 0;
+    color: white;
+    cursor: pointer;
+    user-select: none;
+    width: 100%;
+    font-size: 1.1rem;
+  }
+  .craftBtn:disabled {
+    background: #555;
+    cursor: not-allowed;
+  }
+  #nightOverlay {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    background: rgba(0,0,0,0);
+    transition: background 1s;
+  }
+</style>
+</head>
+<body>
+
+<!-- HOME SCREEN -->
+<div id="homeScreen">
+  <h1>BuildSurvival</h1>
+  <button id="btnCreateWorld">Create World</button>
+  <button id="btnJoinWorld" disabled>Join World</button>
+  <div id="worldList"></div>
+</div>
+
+<!-- GAME SCREEN -->
+<div id="gameScreen" class="hidden">
+  <div id="ui">
+    HP: <span id="hpCount">10</span><br />
+    Holding: <span id="heldItem">None</span><br />
+    Logs: <span id="logsCount">0</span><br />
+    Fish: <span id="fishCount">0</span><br />
+    <span id="saveStatus"></span>
+  </div>
+  <div id="canvasContainer">
+    <canvas id="gameCanvas" width="512" height="512" style="image-rendering: pixelated;"></canvas>
+    <div id="message"></div>
+  </div>
+  <div id="inventory"></div>
+  <div id="arrowPad">
+    <div class="arrowBtn" id="btnUp">⬆️</div>
+    <div></div>
+    <div class="arrowBtn" id="btnRight">➡️</div>
+    <div class="arrowBtn" id="btnLeft">⬅️</div>
+    <div></div>
+    <div class="arrowBtn" id="btnDown">⬇️</div>
+  </div>
+  <button id="btnCraft" style="position:absolute; bottom: 250px; left: 50%; transform: translateX(-50%); padding: 10px 20px; font-size: 1.2rem; border-radius: 12px; background:#33bb33; color:#fff; user-select:none;">Craft</button>
+
+  <div id="craftingPanel">
+    <h3>Crafting</h3>
+    <button class="craftBtn" data-item="torch">Torch (2 logs)</button>
+    <button class="craftBtn" data-item="door">Door (3 logs)</button>
+    <button class="craftBtn" data-item="fishingRod">Fishing Rod (4 logs)</button>
+    <button class="craftBtn" id="closeCrafting">Close</button>
+  </div>
+  <div id="nightOverlay"></div>
+</div>
+
+<script>
+(() => {
+  // Constants
+  const TILE_SIZE = 32;
+  const GRID_W = 16;
+  const GRID_H = 16;
+  const MAX_WORLDS = 3;
+  const SAVE_INTERVAL = 20000; // 20 sec save
+  const NIGHT_DURATION_MS = 120000; // 2 min day/night cycle
+
+  // Emojis for tiles/entities
+  const EMOJIS = {
+    grass: '🟩',
+    tree: '🌳',
+    log: '🟫',
+    pond: '💧',
+    doorClosed: '🚪',
+    doorOpen: '🚪', // same emoji but we track open state separately
+    torch: '🔥',
+    monster: '👹',
+    fish: '🐟',
+    player: '🙂',
+  };
+
+  // Game State
+  let worlds = []; // array of { name, grid, player, inventory, time, monsters, night }
+  let currentWorldIndex = null;
+
+  // UI elements
+  const homeScreen = document.getElementById('homeScreen');
+  const gameScreen = document.getElementById('gameScreen');
+  const worldListDiv = document.getElementById('worldList');
+  const btnCreateWorld = document.getElementById('btnCreateWorld');
+  const btnJoinWorld = document.getElementById('btnJoinWorld');
+  const hpCount = document.getElementById('hpCount');
+  const logsCount = document.getElementById('logsCount');
+  const fishCount = document.getElementById('fishCount');
+  const heldItemSpan = document.getElementById('heldItem');
+  const saveStatus = document.getElementById('saveStatus');
+  const messageDiv = document.getElementById('message');
+  const inventoryDiv = document.getElementById('inventory');
+  const craftingPanel = document.getElementById('craftingPanel');
+  const btnCraft = document.getElementById('btnCraft');
+  const nightOverlay = document.getElementById('nightOverlay');
+
+  // Canvas setup
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  ctx.font = '28px Segoe UI Emoji, Arial';
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'center';
+
+  // Arrow buttons
+  const btnUp = document.getElementById('btnUp');
+  const btnDown = document.getElementById('btnDown');
+  const btnLeft = document.getElementById('btnLeft');
+  const btnRight = document.getElementById('btnRight');
+
+  // Game Variables
+  let grid, player, inventory, monsters, time, night, heldItem;
+  let savingTimeout = null;
+  let fishingTimeout = null;
+  let fishingActive = false;
+  let lastSaveTime = 0;
+  let lastUpdateTime = 0;
+
+  // Initialize
+  function init() {
+    loadWorlds();
+    renderWorldList();
+  }
+
+  // Load worlds from localStorage
+  function loadWorlds() {
+    const saved = localStorage.getItem('buildSurvivalWorlds');
+    if (saved) {
+      worlds = JSON.parse(saved);
+    }
+  }
+
+  // Save worlds to localStorage
+  function saveWorlds() {
+    localStorage.setItem('buildSurvivalWorlds', JSON.stringify(worlds));
+  }
+
+  // Create a new empty grid (16x16) with trees and pond
+  function createEmptyGrid() {
+    let newGrid = [];
+    for(let y=0; y<GRID_H; y++) {
+      newGrid[y] = [];
+      for(let x=0; x<GRID_W; x++) {
+        newGrid[y][x] = { type: 'grass', hits: 0, open: false };
+      }
+    }
+    // Place ~20 trees randomly
+    let treesPlaced = 0;
+    while(treesPlaced < 20) {
+      let tx = Math.floor(Math.random()*GRID_W);
+      let ty = Math.floor(Math.random()*GRID_H);
+      if(newGrid[ty][tx].type === 'grass') {
+        newGrid[ty][tx] = { type: 'tree', hits: 3 };
+        treesPlaced++;
+      }
+    }
+    // Place pond (3x4) randomly
+    let px, py;
+    do {
+      px = Math.floor(Math.random()*(GRID_W-4));
+      py = Math.floor(Math.random()*(GRID_H-3));
+    } while(!canPlacePond(newGrid, px, py));
+    for(let y=0; y<3; y++) {
+      for(let x=0; x<4; x++) {
+        newGrid[py+y][px+x] = { type: 'pond' };
+      }
+    }
+    return newGrid;
+  }
+  function canPlacePond(grid, px, py) {
+    for(let y=0; y<3; y++) {
+      for(let x=0; x<4; x++) {
+        if(grid[py+y][px+x].type !== 'grass') return false;
+      }
+    }
+    return true;
+  }
+
+  // Render world list in Home screen
+  function renderWorldList() {
+    worldListDiv.innerHTML = '';
+    if(worlds.length === 0) {
+      worldListDiv.innerHTML = '<p>No worlds yet.</p>';
+      btnJoinWorld.disabled = true;
+      return;
+    }
+    btnJoinWorld.disabled = false;
+    worlds.forEach((w, i) => {
+      const b = document.createElement('button');
+      b.textContent = `Join: ${w.name}`;
+      b.onclick = () => {
+        joinWorld(i);
+      };
+      worldListDiv.appendChild(b);
+    });
+  }
+
+  // Join world by index
+  function joinWorld(idx) {
+    currentWorldIndex = idx;
+    loadWorld(idx);
+    showGameScreen();
+  }
+
+  // Load world into active game state
+  function loadWorld(idx) {
+    let w = worlds[idx];
+    grid = w.grid;
+    player = w.player;
+    inventory = w.inventory;
+    monsters = w.monsters || [];
+    time = w.time || 0;
+    night = w.night || false;
+    heldItem = null;
+    fishingActive = false;
+    updateUI();
+  }
+
+  // Show game screen
+  function showGameScreen() {
+    homeScreen.classList.add('hidden');
+    gameScreen.classList.remove('hidden');
+  }
+
+  // Show home screen
+  function showHomeScreen() {
+    homeScreen.classList.remove('hidden');
+    gameScreen.classList.add('hidden');
+  }
+
+  // Create a new world
+  function createWorld() {
+    if(worlds.length >= MAX_WORLDS) {
+      alert('Maximum 3 worlds reached.');
+      return;
+    }
+    let name = prompt('Enter world name (max 12 chars):');
+    if(!name) return;
+    name = name.trim().substring(0,12);
+    const newGrid = createEmptyGrid();
+    const newWorld = {
+      name,
+      grid: newGrid,
+      player: { x: 8, y: 8, hp: 10 },
+      inventory: { logs: 0, fish: 0, torch: 0, door: 0, fishingRod: 0 },
+      monsters: [],
+      time: 0,
+      night: false,
+    };
+    worlds.push(newWorld);
+    saveWorlds();
+    renderWorldList();
+  }
+
+  // Save current world state
+  function saveCurrentWorld() {
+    if(currentWorldIndex === null) return;
+    const w = worlds[currentWorldIndex];
+    w.grid = grid;
+    w.player = player;
+    w.inventory = inventory;
+    w.monsters = monsters;
+    w.time = time;
+    w.night = night;
+    saveWorlds();
+    showSaveStatus();
+  }
+
+  // Show "Saving..." message for 3 seconds
+  function showSaveStatus() {
+    saveStatus.textContent = 'Saving...';
+    if(savingTimeout) clearTimeout(savingTimeout);
+    savingTimeout = setTimeout(() => {
+      saveStatus.textContent = '';
+    }, 3000);
+  }
+
+  // Draw the game grid with emojis
+  function drawGrid() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Background grass for all tiles
+    for(let y=0; y<GRID_H; y++) {
+      for(let x=0; x<GRID_W; x++) {
+        const tile = grid[y][x];
+        let emoji = EMOJIS.grass;
+        if(tile.type === 'tree') emoji = EMOJIS.tree;
+        else if(tile.type === 'log') emoji = EMOJIS.log;
+        else if(tile.type === 'pond') emoji = EMOJIS.pond;
+        else if(tile.type === 'door') emoji = tile.open ? '🚪' : '🚪';
+        else if(tile.type === 'torch') emoji = EMOJIS.torch;
+        ctx.fillText(emoji, x*TILE_SIZE + TILE_SIZE/2, y*TILE_SIZE + TILE_SIZE/2);
+      }
+    }
+
+    // Draw monsters (👹)
+    monsters.forEach(m => {
+      ctx.fillText(EMOJIS.monster, m.x*TILE_SIZE + TILE_SIZE/2, m.y*TILE_SIZE + TILE_SIZE/2);
+    });
+
+    // Draw player
+    ctx.fillText(EMOJIS.player, player.x*TILE_SIZE + TILE_SIZE/2, player.y*TILE_SIZE + TILE_SIZE/2);
+
+    // Draw overlay for night darkness (50%)
+    if(night) {
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+  }
+
+  // Check if coordinate is inside grid
+  function insideGrid(x, y) {
+    return x>=0 && x<GRID_W && y>=0 && y<GRID_H;
+  }
+
+  // Check if tile blocks movement (tree/log or closed door)
+  function isBlocked(x, y) {
+    if(!insideGrid(x,y)) return true;
+    const t = grid[y][x];
+    if(t.type === 'tree' || t.type === 'log') return true;
+    if(t.type === 'door' && !t.open) return true;
+    return false;
+  }
+
+  // Check if a tile is pond
+  function isPond(x, y) {
+    if(!insideGrid(x,y)) return false;
+    return grid[y][x].type === 'pond';
+  }
+
+  // Check if tile is torch
+  function isTorch(x, y) {
+    if(!insideGrid(x,y)) return false;
+    return grid[y][x].type === 'torch';
+  }
+
+  // Check if monsters can spawn at position (not inside 4x4 around any torch)
+  function canMonsterSpawnAt(x, y) {
+    if(!insideGrid(x,y)) return false;
+    for(let ty=0; ty<GRID_H; ty++) {
+      for(let tx=0; tx<GRID_W; tx++) {
+        if(grid[ty][tx].type === 'torch') {
+          if(Math.abs(tx - x) <= 2 && Math.abs(ty - y) <= 2) return false;
+        }
+      }
+    }
+    // Also no spawn within 4x4 grid around player
+    if(Math.abs(player.x - x) <= 2 && Math.abs(player.y - y) <= 2) return false;
+    // No spawn on blocked tiles
+    if(isBlocked(x,y)) return false;
+    // No spawn on pond or door open
+    const t = grid[y][x];
+    if(t.type === 'pond') return false;
+    return true;
+  }
+
+  // Spawn monsters at night
+  function spawnMonsters() {
+    // spawn up to 4 monsters around map on allowed tiles
+    const spawnPositions = [];
+    for(let y=0; y<GRID_H; y++) {
+      for(let x=0; x<GRID_W; x++) {
+        if(canMonsterSpawnAt(x,y)) spawnPositions.push({x,y});
+      }
+    }
+    shuffle(spawnPositions);
+    let toSpawn = 4 - monsters.length;
+    while(toSpawn > 0 && spawnPositions.length) {
+      const pos = spawnPositions.pop();
+      monsters.push({x: pos.x, y: pos.y, hp: 4});
+      toSpawn--;
+    }
+  }
+
+  // Shuffle helper
+  function shuffle(array) {
+    for(let i = array.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random()*(i+1));
+      [array[i],array[j]] = [array[j],array[i]];
+    }
+  }
+
+  // Game tick: move monsters and attack player if adjacent
+  function gameTick() {
+    time += 1000 / 60; // 60 FPS, add ~16.6ms per frame
+
+    // Day/night cycle
+    const cycleTime = time % (NIGHT_DURATION_MS*2);
+    night = cycleTime >= NIGHT_DURATION_MS;
+
+    if(night) {
+      if(monsters.length < 4) spawnMonsters();
+    } else {
+      monsters = [];
+    }
+
+    // Monsters move slowly toward player (1 tile every 2 seconds)
+    monsters.forEach(mon => {
+      if(mon.hp <= 0) return;
+      // Move every ~120 frames (2 sec)
+      if(time % 2000 < 1000 / 60) {
+        const dx = player.x - mon.x;
+        const dy = player.y - mon.y;
+        let stepX = 0, stepY = 0;
+        if(Math.abs(dx) > Math.abs(dy)) stepX = dx > 0 ? 1 : -1;
+        else if(dy !== 0) stepY = dy > 0 ? 1 : -1;
+
+        // Try move on x or y if not blocked
+        if(stepX !== 0 && !isBlocked(mon.x + stepX, mon.y)) mon.x += stepX;
+        else if(stepY !== 0 && !isBlocked(mon.x, mon.y + stepY)) mon.y += stepY;
+      }
+      // Damage player if adjacent every 2 seconds
+      if(Math.abs(mon.x - player.x) <= 1 && Math.abs(mon.y - player.y) <= 1) {
+        if(time % 2000 < 1000 / 60) {
+          player.hp = Math.max(0, player.hp - 1);
+        }
+      }
+    });
+
+    // Remove dead monsters
+    monsters = monsters.filter(m => m.hp > 0);
+
+    updateUI();
+  }
+
+  // Update UI elements
+  function updateUI() {
+    hpCount.textContent = player.hp;
+    logsCount.textContent = inventory.logs;
+    fishCount.textContent = inventory.fish;
+    heldItemSpan.textContent = heldItem ? itemName(heldItem) : 'None';
+    renderInventory();
+    drawGrid();
+    nightOverlay.style.background = night ? 'rgba(0,0,0,0.5)' : 'transparent';
+  }
+
+  // Convert item id to readable name
+  function itemName(id) {
+    switch(id) {
+      case 'logs': return 'Logs';
+      case 'torch': return 'Torch';
+      case 'door': return 'Door';
+      case 'fishingRod': return 'Fishing Rod';
+      case 'fish': return 'Fish';
+      default: return id;
+    }
+  }
+
+  // Render inventory slots
+  function renderInventory() {
+    inventoryDiv.innerHTML = '';
+    const keys = ['logs', 'torch', 'door', 'fishingRod', 'fish'];
+    keys.forEach(key => {
+      const slot = document.createElement('div');
+      slot.classList.add('invSlot');
+      if(heldItem === key) slot.classList.add('selected');
+      slot.textContent = itemEmoji(key);
+      const count = inventory[key] || 0;
+      if(count > 0) {
+        const countSpan = document.createElement('div');
+        countSpan.classList.add('invCount');
+        countSpan.textContent = count;
+        slot.appendChild(countSpan);
+      }
+      slot.onclick = () => {
+        if(inventory[key] > 0) heldItem = key;
+        else if(heldItem === key) heldItem = null;
+        updateUI();
+      };
+      inventoryDiv.appendChild(slot);
+    });
+  }
+
+  // Map item to emoji for inventory
+  function itemEmoji(id) {
+    switch(id) {
+      case 'logs': return EMOJIS.log;
+      case 'torch': return EMOJIS.torch;
+      case 'door': return EMOJIS.doorClosed;
+      case 'fishingRod': return '🎣';
+      case 'fish': return EMOJIS.fish;
+      default: return '?';
+    }
+  }
+
+  // Handle movement input (dx, dy)
+  function tryMovePlayer(dx, dy) {
+    const nx = player.x + dx;
+    const ny = player.y + dy;
+    if(!insideGrid(nx, ny)) return;
+
+    // Can't move into blocked tile (tree, log, closed door)
+    if(isBlocked(nx, ny)) return;
+
+    player.x = nx;
+    player.y = ny;
+
+    // If fishing rod and on pond, start fishing
+    if(heldItem === 'fishingRod' && isPond(nx, ny) && !fishingActive) {
+      startFishing();
+    }
+
+    // Check if standing on fish (rare case if fish placed as block)
+    // Not implemented as fish are inventory only
+
+    updateUI();
+  }
+
+  // Start fishing action
+  function startFishing() {
+    fishingActive = true;
+    showMessage('Fishing...');
+    fishingTimeout = setTimeout(() => {
+      fishingActive = false;
+      inventory.fish = (inventory.fish || 0) + 1;
+      showMessage('You caught a fish! 🐟', 2000);
+      updateUI();
+    }, 5000);
+  }
+
+  // Show temporary message in center
+  function showMessage(msg, duration=1500) {
+    messageDiv.textContent = msg;
+    messageDiv.style.opacity = '1';
+    if(fishingTimeout) clearTimeout(fishingTimeout);
+    setTimeout(() => {
+      messageDiv.style.opacity = '0';
+    }, duration);
+  }
+
+  // Handle tile tap (mouse or touch) at canvas coords
+  function onTileTap(x, y) {
+    if(!insideGrid(x,y)) return;
+
+    // Can't interact if fishing
+    if(fishingActive) return;
+
+    const tile = grid[y][x];
+    const dist = Math.max(Math.abs(x - player.x), Math.abs(y - player.y));
+    if(dist > 1) return; // Must be adjacent or same tile
+
+    if(tile.type === 'tree') {
+      // Hit tree
+      tile.hits--;
+      showMessage(`Tree hits left: ${tile.hits}`);
+      if(tile.hits <= 0) {
+        tile.type = 'grass';
+        inventory.logs = (inventory.logs || 0) + 1;
+        showMessage('You got 1 log! 🟫', 1500);
+      }
+      updateUI();
+    } else if(tile.type === 'door') {
+      // Toggle door open/closed
+      tile.open = !tile.open;
+      showMessage(tile.open ? 'Door OPEN' : 'Door CLOSED', 1500);
+      updateUI();
+    } else if(tile.type === 'pond' && heldItem === 'fishingRod' && !fishingActive) {
+      startFishing();
+    } else if(tile.type === 'grass' && heldItem === 'logs' && inventory.logs > 0) {
+      // Place log block
+      tile.type = 'log';
+      tile.hits = 0;
+      inventory.logs--;
+      updateUI();
+    } else if(tile.type === 'grass' && heldItem === 'torch' && inventory.torch > 0) {
+      tile.type = 'torch';
+      tile.hits = 0;
+      inventory.torch--;
+      updateUI();
+    } else if(tile.type === 'grass' && heldItem === 'door' && inventory.door > 0) {
+      tile.type = 'door';
+      tile.open = false;
+      inventory.door--;
+      updateUI();
+    }
+  }
+
+  // Tap on inventory fish to eat
+  function tryEatFish() {
+    if(inventory.fish > 0 && player.hp < 10) {
+      inventory.fish--;
+      player.hp = Math.min(10, player.hp + 2);
+      showMessage('You ate a fish and gained 2 HP! ❤️', 2000);
+      updateUI();
+    }
+  }
+
+  // Crafting button clicked
+  btnCraft.onclick = () => {
+    craftingPanel.style.display = 'block';
+  };
+  document.getElementById('closeCrafting').onclick = () => {
+    craftingPanel.style.display = 'none';
+  };
+
+  // Crafting recipes
+  const recipes = {
+    torch: { logs: 2 },
+    door: { logs: 3 },
+    fishingRod: { logs: 4 }
+  };
+
+  // Crafting buttons
+  [...craftingPanel.querySelectorAll('.craftBtn')].forEach(btn => {
+    btn.onclick = () => {
+      const item = btn.dataset.item;
+      if(item === undefined) return;
+      if(canCraft(item)) {
+        craft(item);
+      }
+    };
+  });
+
+  function canCraft(item) {
+    const recipe = recipes[item];
+    if(!recipe) return false;
+    for(const mat in recipe) {
+      if((inventory[mat]||0) < recipe[mat]) return false;
+    }
+    return true;
+  }
+
+  function craft(item) {
+    const recipe = recipes[item];
+    for(const mat in recipe) {
+      inventory[mat] -= recipe[mat];
+    }
+    inventory[item] = (inventory[item]||0) + 1;
+    showMessage(`Crafted 1 ${itemName(item)}!`);
+    updateUI();
+    craftingPanel.style.display = 'none';
+  }
+
+  // Handle canvas click to interact with tile
+  canvas.onclick = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const cx = Math.floor((e.clientX - rect.left) / TILE_SIZE);
+    const cy = Math.floor((e.clientY - rect.top) / TILE_SIZE);
+    onTileTap(cx, cy);
+  };
+
+  // Arrow buttons event
+  function setupArrowButtons() {
+    btnUp.onclick = () => tryMovePlayer(0,-1);
+    btnDown.onclick = () => tryMovePlayer(0,1);
+    btnLeft.onclick = () => tryMovePlayer(-1,0);
+    btnRight.onclick = () => tryMovePlayer(1,0);
+  }
+
+  // Keyboard movement
+  window.onkeydown = (e) => {
+    if(gameScreen.classList.contains('hidden')) return; // Only active in game
+    if(e.repeat) return;
+    switch(e.key) {
+      case 'ArrowUp': tryMovePlayer(0,-1); break;
+      case 'ArrowDown': tryMovePlayer(0,1); break;
+      case 'ArrowLeft': tryMovePlayer(-1,0); break;
+      case 'ArrowRight': tryMovePlayer(1,0); break;
+      case 'f': tryEatFish(); break;
+    }
+  };
+
+  // Game loop with save timer and tick updates
+  function gameLoop() {
+    const now = performance.now();
+    if(now - lastUpdateTime > 1000/30) { // 30 FPS game tick
+      gameTick();
+      lastUpdateTime = now;
+    }
+    // Save every SAVE_INTERVAL ms
+    if(now - lastSaveTime > SAVE_INTERVAL) {
+      saveCurrentWorld();
+      lastSaveTime = now;
+    }
+    requestAnimationFrame(gameLoop);
+  }
+
+  // World management button events
+  btnCreateWorld.onclick = () => {
+    createWorld();
+  };
+  btnJoinWorld.onclick = () => {
+    if(worlds.length > 0) {
+      joinWorld(0);
+    }
+  };
+
+  // Initialization
+  setupArrowButtons();
+  init();
+
+  // Start game loop
+  gameLoop();
+})();
+</script>
+
+</body>
+</html>
