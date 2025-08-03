@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>BuildSurvival</title>
+<style>
+  /* ... same styles from before ... */
+  #craftingPanel {
+    position: absolute;
+    right: 8px;
+    top: 50px;
+    background: rgba(0,0,0,0.7);
+    padding: 10px 15px;
+    border-radius: 12px;
+    font-size: 1.2rem;
+    max-width: 220px;
+    /* always visible now, no display:none */
+    display: block;
+  }
+  /* ... rest styles unchanged ... */
+</style>
+</head>
+<body>
+
+<!-- HOME SCREEN and GAME SCREEN remain same except: -->
+<!-- Removed craft button -->
+
+<div id="craftingPanel">
+  <h3>Crafting</h3>
+  <button class="craftBtn" data-item="torch">Torch (2 logs)</button>
+  <button class="craftBtn" data-item="door">Door (3 logs)</button>
+  <button class="craftBtn" data-item="fishingRod">Fishing Rod (4 logs)</button>
+  <!-- Removed Close button -->
+</div>
+
+<script>
+(() => {
+  // ... All previous constants, variables and functions remain the same except these changes:
+
+  // Remove the craft button logic
+  // btnCraft.onclick = ... no longer needed
+
+  // Crafting buttons click handler:
+  [...document.querySelectorAll('.craftBtn')].forEach(btn => {
+    btn.onclick = () => {
+      const item = btn.dataset.item;
+      if(!item) return;
+      if(canCraft(item)) {
+        craft(item);
+      } else {
+        showMessage(`Not enough materials to craft ${itemName(item)}!`, 2000);
+      }
+    };
+  });
+
+  function craft(item) {
+    const recipe = recipes[item];
+    for(const mat in recipe) {
+      inventory[mat] -= recipe[mat];
+    }
+    inventory[item] = (inventory[item] || 0) + 1;
+    // Instead of just crafting, switch held item to the crafted item
+    heldItem = item;
+    showMessage(`Crafted ${itemName(item)}! Place item by tapping somewhere.`, 3500);
+    updateUI();
+  }
+
+  // Modify onTileTap to place items if holding a placeable crafted item
+  function onTileTap(x, y) {
+    if(!insideGrid(x,y)) return;
+    if(fishingActive) return;
+
+    const tile = grid[y][x];
+    const dist = Math.max(Math.abs(x - player.x), Math.abs(y - player.y));
+    if(dist > 1) return;
+
+    // If holding a placeable item, place it here if tile is grass
+    if(['door','torch','logs'].includes(heldItem)) {
+      if(tile.type !== 'grass') {
+        showMessage('Can only place items on grass tiles!', 1500);
+        return;
+      }
+      if(inventory[heldItem] <= 0) {
+        showMessage(`No ${itemName(heldItem)} left to place!`, 1500);
+        return;
+      }
+      if(heldItem === 'logs') {
+        tile.type = 'log';
+      } else if(heldItem === 'door') {
+        tile.type = 'door';
+        tile.open = false;
+      } else if(heldItem === 'torch') {
+        tile.type = 'torch';
+      }
+      inventory[heldItem]--;
+      showMessage(`${itemName(heldItem)} placed!`);
+      // After placing, clear held item selection automatically
+      heldItem = null;
+      updateUI();
+      return;
+    }
+
+    // Otherwise interact with tile normally:
+
+    if(tile.type === 'tree') {
+      tile.hits--;
+      showMessage(`Tree hits left: ${tile.hits}`);
+      if(tile.hits <= 0) {
+        tile.type = 'grass';
+        inventory.logs = (inventory.logs || 0) + 1;
+        showMessage('You got 1 log! 🟫', 1500);
+      }
+      updateUI();
+    } else if(tile.type === 'door') {
+      tile.open = !tile.open;
+      showMessage(tile.open ? 'Door OPEN' : 'Door CLOSED', 1500);
+      updateUI();
+    } else if(tile.type === 'pond' && heldItem === 'fishingRod' && !fishingActive) {
+      startFishing();
+    }
+  }
+
+  // Rest of the code remains unchanged
+
+  // Initialize, load worlds, start game loop, etc.
+  init();
+  gameLoop();
+})();
+</script>
+
+</body>
+</html>
